@@ -1,0 +1,122 @@
+---
+title: "Data Acquisition and Management Weekly Assignment - Wk10"
+author: "Chun San Yip"
+date: "2020/04/04"
+output: 
+  prettydoc::html_pretty:
+  theme: hpstr
+---
+  
+Overview:
+The assignment for this week is related to Text Mining. 
+In this assignment,  I start by getting the primary example code from chapter 2 of Text Mining with R working in an R Markdown document. I will then extend the code in two ways:
+
+1. Work with a different corpus of my choosing, and
+2. Incorporate at least one additional sentiment lexicon
+
+All the code below are from the primary example code from the book:
+Text Mining with R - A Tidy Approach
+Julia Silge and David Robinson
+2020-03-07
+Creative Commons License
+This work by Julia Silge and David Robinson is licensed under a Creative Commons Attribution-NonCommercial-ShareAlike 3.0 United States License.
+
+Load all the required packages.
+```{r load-packages, message = FALSE}
+library(tidyverse)
+library(tidytext)
+library(textdata)
+library(tidyr)
+library(gutenbergr)
+library(wordcloud)
+```
+
+Load all sentiments
+```{r}
+afinn <- get_sentiments("afinn")
+bing <- get_sentiments("bing")
+nrc <- get_sentiments("nrc")
+```
+
+As I don't want to repeat the same corpus and data from "Text Mining with R - A Tidy Approach", I just use the example to run through a new corpus.
+There is a Gutenberg project that we can use for corpus, I use one of my favourite book - Gulliver's Travels into Several Remote Nations of the World by Jonathan Swift as my corpus
+```{r, message=FALSE}
+gulliver <- gutenberg_download(829)
+gbooks <- gulliver %>%
+  mutate(linenumber = row_number(),
+         chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]", ignore_case = TRUE)))) %>%
+  unnest_tokens(word, text)
+```
+
+I also use the following example codes to generate sentiment comparison on 3 lexicons
+```{r, message=FALSE}
+afinn2 <- gbooks %>% 
+  inner_join(afinn) %>% 
+  group_by(index = linenumber %/% 80) %>% 
+  summarise(sentiment = sum(value)) %>% 
+  mutate(method = "AFINN")
+
+bing_and_nrc2 <- bind_rows(gbooks %>%
+                            inner_join(bing) %>%
+                            mutate(method = "Bing et al."),
+                           gbooks %>%
+                            inner_join(nrc) %>% 
+                            filter(sentiment %in% c("positive", 
+                                                    "negative")) %>%
+                            mutate(method = "NRC")) %>%
+  count(method, index = linenumber %/% 80, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative)
+
+bind_rows(afinn2, 
+          bing_and_nrc2) %>%
+  ggplot(aes(index, sentiment, fill = method)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~method, ncol = 1, scales = "free_y")
+```
+
+It looks like most parts of the book have positive sentiment except at the index of 93 to 95.
+
+There is also a Loughran lexicon that was not used in the example code
+```{r, message=FALSE}
+loughran <- get_sentiments("loughran")
+
+loughran2 <- gbooks %>%
+            inner_join(loughran) %>%
+            mutate(method = "Loughran")%>%
+            count(method, index = linenumber %/% 80, sentiment) %>%
+            spread(sentiment, n, fill = 0) %>%
+            mutate(sentiment = positive - negative)
+
+bind_rows(afinn2, 
+          bing_and_nrc2, loughran2) %>%
+  ggplot(aes(index, sentiment, fill = method)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~method, ncol = 1, scales = "free_y")
+```
+
+Loughran has a lot more negative sentiments than the other 3 lexicons just by looking at the plot.
+
+I would like to remove all the stop_words and see the most frequenct word I can find in the book.
+I also want to see the wordcloud generated from the data.
+
+```{r, message=FALSE, warning=FALSE}
+data(stop_words)
+
+gbooksStop <- gbooks %>%
+  anti_join(stop_words) %>%
+  count(word, sort=TRUE)
+
+gbooksStop 
+ 
+gbooksStop %>% 
+  with(wordcloud(word, n, max.words = 100))
+
+
+```
+
+It's really interesting to see country, time and people are the top 3 in the book!!! 
+It is also interesting to see the wordcloud function generates different patterns and words everytime I re-run the function and the visual result may not align with the count.
+
+
+
